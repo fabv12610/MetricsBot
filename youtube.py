@@ -2,6 +2,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 import os
+import isodate
 
 load_dotenv()
 YOUTUBE_API = os.getenv('YOUTUBE_API')
@@ -124,14 +125,11 @@ def get_video_stats(video_id):
 
 # ──────────────────────────────────────────────
 #  PLAYLIST
-# ──────────────────────────────────────────────
+# ──────────────────────────────────────
 
 def get_playlist_stats(playlist_id):
-    """
-    Fetch playlist info + all videos inside it.
-    Returns a dict (used internally by format_playlist).
-    """
     try:
+        # ─── Get playlist metadata ───
         playlist_response = youtube.playlists().list(
             part='snippet,contentDetails',
             id=playlist_id
@@ -140,20 +138,21 @@ def get_playlist_stats(playlist_id):
         if not playlist_response.get('items'):
             return None
 
-        item    = playlist_response['items'][0]
+        item = playlist_response['items'][0]
         snippet = item['snippet']
 
         playlist = {
-            'title':       snippet['title'],
+            'title': snippet['title'],
             'description': snippet.get('description', ''),
-            'thumbnail':   snippet['thumbnails']['high']['url'],
-            'channel':     snippet.get('channelTitle', ''),
+            'channel': snippet.get('channelTitle', ''),
             'video_count': int(item['contentDetails'].get('itemCount', 0)),
-            'videos':      []
+            'videos': [],
         }
 
-        # Paginate through all videos in the playlist
+        # ─── Get all videos ───
         next_page = None
+        video_id_list = []
+
         while True:
             items_response = youtube.playlistItems().list(
                 part='snippet',
@@ -164,18 +163,44 @@ def get_playlist_stats(playlist_id):
 
             for entry in items_response.get('items', []):
                 s = entry['snippet']
+
                 if s.get('title') in ('Deleted video', 'Private video'):
                     continue
+
+                vid = s['resourceId']['videoId']
+                video_id_list.append(vid)
+
                 playlist['videos'].append({
-                    'title':    s['title'],
-                    'video_id': s['resourceId']['videoId'],
-                    'url':      f"https://www.youtube.com/watch?v={s['resourceId']['videoId']}",
+                    'title': s['title'],
+                    'video_id': vid,
+                    'url': f"https://www.youtube.com/watch?v={vid}",
                     'position': s['position'],
                 })
 
             next_page = items_response.get('nextPageToken')
             if not next_page:
                 break
+
+        # ─── Calculate total duration (batched) ───
+        total_seconds = 0
+
+        for i in range(0, len(video_id_list), 50):
+            batch = video_id_list[i:i+50]
+
+            res = youtube.videos().list(
+                part='contentDetails',
+                id=','.join(batch)
+            ).execute()
+
+            for v in res['items']:
+                dur = v['contentDetails']['duration']
+                total_seconds += isodate.parse_duration(dur).total_seconds()
+
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)
+
+        playlist['Total Duration'] = f"{hours}:{minutes:02}:{seconds:02}"
 
         return playlist
 
@@ -200,14 +225,14 @@ def format_playlist(playlist_id, show_videos=10):
     title       = playlist['title']
     channel     = playlist['channel']
     video_count = playlist['video_count']
-    thumbnail   = playlist['thumbnail']
+    Total_Duration = playlist['Total Duration']
 
     lines = [
         f'📋 **{title}**',
         f'━━━━━━━━━━━━━━━━━━━━',
         f'👤 **Channel:** {channel}',
         f'🎬 **Videos:** {video_count:,}',
-        f'🖼️  {thumbnail}',
+        f'⏱️ **Total Duration** {Total_Duration}',
         f'━━━━━━━━━━━━━━━━━━━━',
     ]
 

@@ -55,7 +55,7 @@ async def on_message(message):
     for _ in (playlist_list):
         await message.channel.send(youtube.format_playlist(_))
 
-    # IMPORTANT: Allow commands (like !help or other bot commands) to run
+    #to run other commands
     await bot.process_commands(message)
 
 try:
