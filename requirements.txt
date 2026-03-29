@@ -3,3 +3,16 @@ python-dotenv
 google-api-python-client
 discord
 isodate
+spotapi
+colorama
+Pillow
+readerwriterlock
+requests
+tls_client
+typing_extensions
+validators
+websockets
+pyotp
+beautifulsoup4
+pymongo
+import redis

@@ -10,13 +10,19 @@ YOUTUBE_API = os.getenv('YOUTUBE_API')
 # Build the YouTube service once and reuse it
 youtube = build('youtube', 'v3', developerKey=YOUTUBE_API)
 
-
 # ──────────────────────────────────────────────
 #  SEARCH
 # ──────────────────────────────────────────────
 
 def search_youtube(query, max_results=5):
     """Search YouTube and return a Discord-formatted string."""
+
+    """
+    Args:
+        query: YouTube query sent to be searched
+        max_results: max results outputed, default is 5
+    """
+
     try:
         response = youtube.search().list(
             part='snippet',
@@ -40,13 +46,18 @@ def search_youtube(query, max_results=5):
     except HttpError as e:
         return f'❌ Search error: {e}'
 
-
 # ──────────────────────────────────────────────
 #  CHANNEL
 # ──────────────────────────────────────────────
 
 def get_channel_stats(channel_id):
     """Fetch channel stats and return a Discord-formatted string."""
+
+    """
+    Args:
+        channel_id: YouTube channel ID
+    """
+
     try:
         response = youtube.channels().list(
             part='snippet,statistics',
@@ -67,18 +78,19 @@ def get_channel_stats(channel_id):
         video_count = int(stats.get('videoCount', 0))
 
         return (
-            f'📺 **{title}**\n'
-            f'━━━━━━━━━━━━━━━━━━━━\n'
-            f'👥 **Subscribers:** {subscribers:,}\n'
-            f'👁️  **Total Views:** {views:,}\n'
-            f'🎬 **Videos:** {video_count:,}\n'
-            f'━━━━━━━━━━━━━━━━━━━━\n'
-            f'📝 {description}\n'
-        )
+                    f'# 📺 YouTube Channel\n'  # Header must start the line
+                    f'──────────────────────────────────────────────\n'
+                    f'## 📺 {title}\n'         # Header must start the line
+                    f'─────────────────────\n'
+                    f'👥 **Subscribers:** {subscribers:,}\n'
+                    f'👁️  **Total Views:** {views:,}\n'
+                    f'🎬 **Videos:** {video_count:,}\n'
+                    f'─────────────────────\n'
+                    f'📝 {description}\n'
+                )
 
     except HttpError as e:
         return f'❌ Channel error: {e}'
-
 
 # ──────────────────────────────────────────────
 #  VIDEO
@@ -86,6 +98,11 @@ def get_channel_stats(channel_id):
 
 def get_video_stats(video_id):
     """Fetch video stats and return a Discord-formatted string."""
+    """
+    Args:
+        video_id: YouTube video ID
+    """
+
     try:
         response = youtube.videos().list(
             part='snippet,statistics',
@@ -108,26 +125,34 @@ def get_video_stats(video_id):
         url          = f'https://www.youtube.com/watch?v={video_id}'
 
         return (
-            f'🎬 **{title}**\n'
-            f'━━━━━━━━━━━━━━━━━━━━\n'
-            f'👤 **Channel:** {channel}\n'
-            f'📅 **Published:** {published_at}\n'
-            f'👁️  **Views:** {views:,}\n'
-            f'👍 **Likes:** {likes:,}\n'
-            f'💬 **Comments:** {comments:,}\n'
-            f'━━━━━━━━━━━━━━━━━━━━\n'
-            f'🔗 {url}\n'
-        )
+                    f'# 📺 YouTube Video\n'
+                    f'──────────────────────────────────────────────\n'
+                    f'## 🎬 {title}\n'
+                    f'─────────────────────\n'
+                    f'👤 **Channel:** {channel}\n'
+                    f'📅 **Published:** {published_at}\n'
+                    f'👁️  **Views:** {views:,}\n'
+                    f'👍 **Likes:** {likes:,}\n'
+                    f'💬 **Comments:** {comments:,}\n'
+                    f'─────────────────────\n'
+                    f'🔗 {url}\n'
+                )
 
     except HttpError as e:
         return f'❌ Video error: {e}'
 
-
 # ──────────────────────────────────────────────
 #  PLAYLIST
-# ──────────────────────────────────────
+# ──────────────────────────────────────────────
 
 def get_playlist_stats(playlist_id):
+    """Fetch playlist stats and return a Discord-formatted string."""
+
+    """
+    Args:
+        playlist_id: YouTube playlist ID
+    """
+
     try:
         # ─── Get playlist metadata ───
         playlist_response = youtube.playlists().list(
@@ -208,44 +233,54 @@ def get_playlist_stats(playlist_id):
         print(f'[playlist] Error: {e}')
         return None
 
+# ──────────────────────────────────────────────
+#  FORMAT PLAYLIST
+# ──────────────────────────────────────────────
 
 def format_playlist(playlist_id, show_videos=10):
-    """
-    Fetch a playlist and return a Discord-formatted string.
+    try:
+        """
+        Fetch a playlist and return a Discord-formatted string.
 
-    Args:
-        playlist_id: YouTube playlist ID
-        show_videos: How many videos to list (default 10, use 0 for none)
-    """
-    playlist = get_playlist_stats(playlist_id)
+        Args:
+            playlist_id: YouTube playlist ID
+            show_videos: How many videos to list (default 10, use 0 for none)
+        """
+        playlist = get_playlist_stats(playlist_id)
 
-    if playlist is None:
-        return f'❌ No playlist found for ID: `{playlist_id}`'
+        if playlist is None:
+            return f'❌ No playlist found for ID: `{playlist_id}`'
 
-    title       = playlist['title']
-    channel     = playlist['channel']
-    video_count = playlist['video_count']
-    Total_Duration = playlist['Total Duration']
+        title       = playlist['title']
+        channel     = playlist['channel']
+        video_count = playlist['video_count']
+        Total_Duration = playlist['Total Duration']
+        
+        lines = [
+                    f'# 📺 YouTube Playlist',
+                    f'──────────────────────────────────────────────\n'
+                    f'## 📋 {title}',
+                    f'─────────────────────',
+                    f'👤 **Channel:** {channel}',
+                    f'🎬 **Videos:** {video_count:,}',
+                    f'⏱️ **Total Duration:** {Total_Duration}', # Added missing colon for consistency
+                    f'─────────────────────',
+                ]
 
-    lines = [
-        f'📋 **{title}**',
-        f'━━━━━━━━━━━━━━━━━━━━',
-        f'👤 **Channel:** {channel}',
-        f'🎬 **Videos:** {video_count:,}',
-        f'⏱️ **Total Duration** {Total_Duration}',
-        f'━━━━━━━━━━━━━━━━━━━━',
-    ]
+        # List videos
+        videos_to_show = playlist['videos'][:show_videos] if show_videos else []
+        if videos_to_show:
+            lines.append(f'**🎵 First {len(videos_to_show)} videos:**\n')
+            for v in videos_to_show:
+                num = v['position'] + 1
+                lines.append(f'`{num:>3}.` [{v["title"]}]({v["url"]})')
 
-    # List videos
-    videos_to_show = playlist['videos'][:show_videos] if show_videos else []
-    if videos_to_show:
-        lines.append(f'**🎵 First {len(videos_to_show)} videos:**\n')
-        for v in videos_to_show:
-            num = v['position'] + 1
-            lines.append(f'`{num:>3}.` [{v["title"]}]({v["url"]})')
+            remaining = video_count - len(videos_to_show)
+            if remaining > 0:
+                lines.append(f'\n*...and {remaining} more videos*')
 
-        remaining = video_count - len(videos_to_show)
-        if remaining > 0:
-            lines.append(f'\n*...and {remaining} more videos*')
+        return '\n'.join(lines)
 
-    return '\n'.join(lines)
+    except HttpError as e:
+        print(f'[playlist] formatting Error: {e}')
+        return None
