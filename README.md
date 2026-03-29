@@ -6,7 +6,7 @@ A Discord bot that extracts and displays useful information from social media UR
 
 **Production Ready (Active Use)**
 
-> ⚠️ Currently, only **YouTube URLs** are fully supported. Support for additional platforms is planned.
+> ⚠️ Currently, only **YouTube URLs** and **Spotify Track URLs** are fully supported. Support for additional platforms is planned.
 
 ---
 
