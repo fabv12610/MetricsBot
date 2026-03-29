@@ -3,6 +3,8 @@ from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 import os
 import isodate
+import discord
+import re
 
 load_dotenv()
 YOUTUBE_API = os.getenv('YOUTUBE_API')
@@ -15,14 +17,6 @@ youtube = build('youtube', 'v3', developerKey=YOUTUBE_API)
 # ──────────────────────────────────────────────
 
 def search_youtube(query, max_results=5):
-    """Search YouTube and return a Discord-formatted string."""
-
-    """
-    Args:
-        query: YouTube query sent to be searched
-        max_results: max results outputed, default is 5
-    """
-
     try:
         response = youtube.search().list(
             part='snippet',
@@ -32,32 +26,38 @@ def search_youtube(query, max_results=5):
         ).execute()
 
         if not response.get('items'):
-            return '❌ No results found.'
+            return discord.Embed(
+                title="❌ No results",
+                description=f"No results for `{query}`",
+                color=0xFF0000
+            )
 
-        lines = [f'🔍 **Search results for:** `{query}`\n']
+        lines = []
         for i, item in enumerate(response['items'], start=1):
             title   = item['snippet']['title']
             channel = item['snippet']['channelTitle']
             url     = f"https://www.youtube.com/watch?v={item['id']['videoId']}"
-            lines.append(f'`{i}.` **{title}**\n    👤 {channel}\n    🔗 {url}')
 
-        return '\n\n'.join(lines)
+            lines.append(f"**{i}. [{title}]({url})**\n👤 {channel}")
+
+        embed = discord.Embed(
+            title=f"🔍 {query}",
+            description="\n\n".join(lines),
+            color=0xFF0000
+        )
+
+        embed.set_footer(text="YouTube • Search")
+
+        return embed
 
     except HttpError as e:
-        return f'❌ Search error: {e}'
+        return discord.Embed(title="❌ Error", description=str(e), color=0xFF0000)
 
 # ──────────────────────────────────────────────
 #  CHANNEL
 # ──────────────────────────────────────────────
 
 def get_channel_stats(channel_id):
-    """Fetch channel stats and return a Discord-formatted string."""
-
-    """
-    Args:
-        channel_id: YouTube channel ID
-    """
-
     try:
         response = youtube.channels().list(
             part='snippet,statistics',
@@ -65,44 +65,54 @@ def get_channel_stats(channel_id):
         ).execute()
 
         if not response.get('items'):
-            return f'❌ No channel found for ID: `{channel_id}`'
+            return discord.Embed(
+                title="❌ Not found",
+                description=f"Channel ID `{channel_id}`",
+                color=0xFF0000
+            )
 
         item    = response['items'][0]
         stats   = item['statistics']
         snippet = item['snippet']
 
         title       = snippet['title']
-        description = snippet.get('description', 'No description.')[:200]  # cap length
+        description = snippet.get('description', 'No description.')[:200]
         subscribers = int(stats.get('subscriberCount', 0))
         views       = int(stats.get('viewCount', 0))
         video_count = int(stats.get('videoCount', 0))
+        thumbnail   = snippet.get('thumbnails', {}).get('high', {}).get('url')
 
-        return (
-                    f'# 📺 YouTube Channel\n'  # Header must start the line
-                    f'──────────────────────────────────────────────\n'
-                    f'## 📺 {title}\n'         # Header must start the line
-                    f'─────────────────────\n'
-                    f'👥 **Subscribers:** {subscribers:,}\n'
-                    f'👁️  **Total Views:** {views:,}\n'
-                    f'🎬 **Videos:** {video_count:,}\n'
-                    f'─────────────────────\n'
-                    f'📝 {description}\n'
-                )
+        embed = discord.Embed(
+            title=f"📺 {title}",
+            description=description,
+            color=0xFF0000
+        )
+
+        if thumbnail:
+            embed.set_thumbnail(url=thumbnail)
+
+        embed.add_field(
+            name="📊 Stats",
+            value=(
+                f"👥 {subscribers:,} subscribers\n"
+                f"👁️ {views:,} views\n"
+                f"🎬 {video_count:,} videos"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="YouTube • Channel")
+
+        return embed
 
     except HttpError as e:
-        return f'❌ Channel error: {e}'
+        return discord.Embed(title="❌ Error", description=str(e), color=0xFF0000)
 
 # ──────────────────────────────────────────────
 #  VIDEO
 # ──────────────────────────────────────────────
 
 def get_video_stats(video_id):
-    """Fetch video stats and return a Discord-formatted string."""
-    """
-    Args:
-        video_id: YouTube video ID
-    """
-
     try:
         response = youtube.videos().list(
             part='snippet,statistics',
@@ -110,36 +120,53 @@ def get_video_stats(video_id):
         ).execute()
 
         if not response.get('items'):
-            return f'❌ No video found for ID: `{video_id}`'
+            return discord.Embed(
+                title="❌ Not found",
+                description=f"Video ID `{video_id}`",
+                color=0xFF0000
+            )
 
         item    = response['items'][0]
         stats   = item['statistics']
         snippet = item['snippet']
 
-        title        = snippet['title']
-        channel      = snippet.get('channelTitle', 'Unknown')
-        published_at = snippet.get('publishedAt', '')[:10]  # just the date
-        views        = int(stats.get('viewCount', 0))
-        likes        = int(stats.get('likeCount', 0))
-        comments     = int(stats.get('commentCount', 0))
-        url          = f'https://www.youtube.com/watch?v={video_id}'
+        title   = snippet['title']
+        channel = snippet.get('channelTitle', 'Unknown')
+        date    = snippet.get('publishedAt', '')[:10]
+        views   = int(stats.get('viewCount', 0))
+        likes   = int(stats.get('likeCount', 0))
+        comments= int(stats.get('commentCount', 0))
+        url     = f'https://www.youtube.com/watch?v={video_id}'
+        thumb   = snippet.get('thumbnails', {}).get('high', {}).get('url')
 
-        return (
-                    f'# 📺 YouTube Video\n'
-                    f'──────────────────────────────────────────────\n'
-                    f'## 🎬 {title}\n'
-                    f'─────────────────────\n'
-                    f'👤 **Channel:** {channel}\n'
-                    f'📅 **Published:** {published_at}\n'
-                    f'👁️  **Views:** {views:,}\n'
-                    f'👍 **Likes:** {likes:,}\n'
-                    f'💬 **Comments:** {comments:,}\n'
-                    f'─────────────────────\n'
-                    f'🔗 {url}\n'
-                )
+        embed = discord.Embed(
+            title=f"🎬 {title}",
+            url=url,
+            color=0xFF0000
+        )
+
+        if thumb:
+            embed.set_thumbnail(url=thumb)
+
+        embed.add_field(name="👤 Channel", value=channel, inline=True)
+        embed.add_field(name="📅 Published", value=date, inline=True)
+
+        embed.add_field(
+            name="📊 Stats",
+            value=(
+                f"👁️ {views:,}\n"
+                f"👍 {likes:,}\n"
+                f"💬 {comments:,}"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="YouTube • Video")
+
+        return embed
 
     except HttpError as e:
-        return f'❌ Video error: {e}'
+        return discord.Embed(title="❌ Error", description=str(e), color=0xFF0000)
 
 # ──────────────────────────────────────────────
 #  PLAYLIST
@@ -237,50 +264,54 @@ def get_playlist_stats(playlist_id):
 #  FORMAT PLAYLIST
 # ──────────────────────────────────────────────
 
-def format_playlist(playlist_id, show_videos=10):
+def format_playlist(playlist_id, show_videos=5):
     try:
-        """
-        Fetch a playlist and return a Discord-formatted string.
-
-        Args:
-            playlist_id: YouTube playlist ID
-            show_videos: How many videos to list (default 10, use 0 for none)
-        """
         playlist = get_playlist_stats(playlist_id)
 
         if playlist is None:
-            return f'❌ No playlist found for ID: `{playlist_id}`'
+            return discord.Embed(
+                title="❌ Not found",
+                description=f"Playlist ID `{playlist_id}`",
+                color=0xFF0000
+            )
 
         title       = playlist['title']
         channel     = playlist['channel']
         video_count = playlist['video_count']
-        Total_Duration = playlist['Total Duration']
-        
-        lines = [
-                    f'# 📺 YouTube Playlist',
-                    f'──────────────────────────────────────────────\n'
-                    f'## 📋 {title}',
-                    f'─────────────────────',
-                    f'👤 **Channel:** {channel}',
-                    f'🎬 **Videos:** {video_count:,}',
-                    f'⏱️ **Total Duration:** {Total_Duration}', # Added missing colon for consistency
-                    f'─────────────────────',
-                ]
+        duration    = playlist['Total Duration']
 
-        # List videos
-        videos_to_show = playlist['videos'][:show_videos] if show_videos else []
-        if videos_to_show:
-            lines.append(f'**🎵 First {len(videos_to_show)} videos:**\n')
-            for v in videos_to_show:
-                num = v['position'] + 1
-                lines.append(f'`{num:>3}.` [{v["title"]}]({v["url"]})')
+        videos = playlist['videos'][:show_videos]
 
-            remaining = video_count - len(videos_to_show)
-            if remaining > 0:
-                lines.append(f'\n*...and {remaining} more videos*')
+        video_list = "\n".join(
+            f"**{i+1}. [{v['title']}]({v['url']})**"
+            for i, v in enumerate(videos)
+        )
 
-        return '\n'.join(lines)
+        embed = discord.Embed(
+            title=f"📋 {title}",
+            description=f"👤 {channel}",
+            color=0xFF0000
+        )
+
+        embed.add_field(
+            name="📊 Info",
+            value=(
+                f"🎬 {video_count:,} videos\n"
+                f"⏱️ {duration}"
+            ),
+            inline=False
+        )
+
+        if videos:
+            embed.add_field(
+                name="🎵 Videos",
+                value=video_list,
+                inline=False
+            )
+
+        embed.set_footer(text="YouTube • Playlist")
+
+        return embed
 
     except HttpError as e:
-        print(f'[playlist] formatting Error: {e}')
-        return None
+        return discord.Embed(title="❌ Error", description=str(e), color=0xFF0000)
